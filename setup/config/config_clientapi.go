@@ -316,8 +316,9 @@ var (
 type IdentityProviderType string
 
 const (
-	SSOTypeOIDC   IdentityProviderType = "oidc"
-	SSOTypeGitHub IdentityProviderType = "github"
+	SSOTypeOIDC     IdentityProviderType = "oidc"
+	SSOTypeGitHub   IdentityProviderType = "github"
+	SSOTypeMastodon IdentityProviderType = "mastodon"
 )
 
 type TURN struct {

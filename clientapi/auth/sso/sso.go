@@ -56,6 +56,8 @@ func NewAuthenticator(cfg *config.SSO) (*Authenticator, error) {
 			a.providers[pcfg.ID] = newOIDCIdentityProvider(&pcfg, hc)
 		case config.SSOTypeGitHub:
 			a.providers[pcfg.ID] = newGitHubIdentityProvider(&pcfg, hc)
+		case config.SSOTypeMastodon:
+			a.providers[pcfg.ID] = newMastodonIdentityProvider(&pcfg, hc)
 		default:
 			return nil, fmt.Errorf("unknown SSO provider type: %s", pcfg.Type)
 		}

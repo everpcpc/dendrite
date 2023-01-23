@@ -43,6 +43,8 @@ func validateSSOIssuerNamespace(ns api.SSOIssuerNamespace) (string, error) {
 	switch ns {
 	case api.OIDCNamespace:
 		return string(ns), nil
+	case api.SSOIDNamespace:
+		return string(ns), nil
 
 	default:
 		return "", fmt.Errorf("invalid SSO issuer namespace: %s", ns)

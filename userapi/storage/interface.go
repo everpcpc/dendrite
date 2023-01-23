@@ -113,6 +113,12 @@ type Pusher interface {
 	RemovePushers(ctx context.Context, appid, pushkey string) error
 }
 
+type SSO interface {
+	SaveSSOAssociation(ctx context.Context, namespace, iss, sub, localpart string) error
+	RemoveSSOAssociation(ctx context.Context, namespace, iss, sub string) error
+	GetLocalpartForSSO(ctx context.Context, namespace, iss, sub string) (string, error)
+}
+
 type ThreePID interface {
 	SaveThreePIDAssociation(ctx context.Context, threepid, localpart string, serverName gomatrixserverlib.ServerName, medium string) (err error)
 	RemoveThreePIDAssociation(ctx context.Context, threepid string, medium string) (err error)
@@ -140,6 +146,7 @@ type Database interface {
 	OpenID
 	Profile
 	Pusher
+	SSO
 	Statistics
 	ThreePID
 }

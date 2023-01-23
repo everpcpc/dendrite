@@ -24,6 +24,7 @@ import (
 // nolint: gocyclo
 func AddRoutes(internalAPIMux *mux.Router, s api.UserInternalAPI, enableMetrics bool) {
 	addRoutesLoginToken(internalAPIMux, s, enableMetrics)
+	addRoutesSSO(internalAPIMux, s, enableMetrics)
 
 	internalAPIMux.Handle(
 		PerformAccountCreationPath,

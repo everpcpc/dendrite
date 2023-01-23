@@ -99,6 +99,10 @@ func NewDatabase(base *base.BaseDendrite, dbProperties *config.DatabaseOptions, 
 	if err != nil {
 		return nil, fmt.Errorf("NewPostgresNotificationTable: %w", err)
 	}
+	ssoTable, err := NewPostgresSSOTable(db)
+	if err != nil {
+		return nil, fmt.Errorf("NewPostgresSSOTable: %w", err)
+	}
 	statsTable, err := NewPostgresStatsTable(db, serverName)
 	if err != nil {
 		return nil, fmt.Errorf("NewPostgresStatsTable: %w", err)
@@ -127,6 +131,7 @@ func NewDatabase(base *base.BaseDendrite, dbProperties *config.DatabaseOptions, 
 		ThreePIDs:             threePIDTable,
 		Pushers:               pusherTable,
 		Notifications:         notificationsTable,
+		SSOs:                  ssoTable,
 		Stats:                 statsTable,
 		ServerName:            serverName,
 		DB:                    db,

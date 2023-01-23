@@ -115,6 +115,12 @@ type NotificationTable interface {
 	SelectRoomCounts(ctx context.Context, txn *sql.Tx, localpart string, serverName gomatrixserverlib.ServerName, roomID string) (total int64, highlight int64, _ error)
 }
 
+type SSOTable interface {
+	SelectLocalpartForSSO(ctx context.Context, txn *sql.Tx, namespace, iss, sub string) (string, error)
+	InsertSSO(ctx context.Context, txn *sql.Tx, namespace, iss, sub, localpart string) error
+	DeleteSSO(ctx context.Context, txn *sql.Tx, namespace, iss, sub string) error
+}
+
 type StatsTable interface {
 	UserStatistics(ctx context.Context, txn *sql.Tx) (*types.UserStatistics, *types.DatabaseEngine, error)
 	DailyRoomsMessages(ctx context.Context, txn *sql.Tx, serverName gomatrixserverlib.ServerName) (msgStats types.MessageStats, activeRooms, activeE2EERooms int64, err error)

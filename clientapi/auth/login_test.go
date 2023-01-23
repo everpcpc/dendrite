@@ -72,6 +72,11 @@ func TestLoginFromJSONReader(t *testing.T) {
 						ServerName: serverName,
 					},
 				},
+				Login: config.Login{
+					SSO: config.SSO{
+						Enabled: true,
+					},
+				},
 			}
 			login, cleanup, err := LoginFromJSONReader(ctx, strings.NewReader(tst.Body), &userAPI, &userAPI, cfg)
 			if err != nil {
@@ -97,6 +102,34 @@ func TestLoginFromJSONReader(t *testing.T) {
 				t.Errorf("DeletedTokens: got %+v, want %+v", userAPI.DeletedTokens, tst.WantDeletedTokens)
 			}
 		})
+	}
+}
+
+func TestLoginFromJSONReaderTokenDisabled(t *testing.T) {
+	ctx := context.Background()
+
+	var userAPI fakeUserInternalAPI
+	g := &config.Global{}
+	g.ServerName = serverName
+	cfg := &config.ClientAPI{
+		Matrix: g,
+		Login: config.Login{
+			SSO: config.SSO{
+				Enabled: false,
+			},
+		},
+	}
+	_, cleanup, err := LoginFromJSONReader(ctx, strings.NewReader(`{
+			"type": "m.login.token",
+			"token": "atoken",
+			"device_id": "adevice"
+		}`), &userAPI, &userAPI, cfg)
+	wantCode := "M_INVALID_ARGUMENT_VALUE"
+	if err == nil {
+		cleanup(ctx, nil)
+		t.Fatalf("LoginFromJSONReader err: got %+v, want code %q", err, wantCode)
+	} else if merr, ok := err.JSON.(*jsonerror.MatrixError); ok && merr.ErrCode != wantCode {
+		t.Fatalf("LoginFromJSONReader err: got %+v, want code %q", err, wantCode)
 	}
 }
 
@@ -150,6 +183,11 @@ func TestBadLoginFromJSONReader(t *testing.T) {
 				Matrix: &config.Global{
 					SigningIdentity: gomatrixserverlib.SigningIdentity{
 						ServerName: serverName,
+					},
+				},
+				Login: config.Login{
+					SSO: config.SSO{
+						Enabled: true,
 					},
 				},
 			}

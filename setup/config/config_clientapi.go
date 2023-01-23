@@ -48,6 +48,8 @@ type ClientAPI struct {
 	// was successful
 	RecaptchaSiteVerifyAPI string `yaml:"recaptcha_siteverify_api"`
 
+	Login Login `yaml:"login"`
+
 	// TURN options
 	TURN TURN `yaml:"turn"`
 
@@ -72,9 +74,11 @@ func (c *ClientAPI) Defaults(opts DefaultOpts) {
 	c.RegistrationDisabled = true
 	c.OpenRegistrationWithoutVerificationEnabled = false
 	c.RateLimiting.Defaults()
+	c.Login.SSO.Enabled = false
 }
 
 func (c *ClientAPI) Verify(configErrs *ConfigErrors, isMonolith bool) {
+	c.Login.Verify(configErrs)
 	c.TURN.Verify(configErrs)
 	c.RateLimiting.Verify(configErrs)
 	if c.RecaptchaEnabled {
@@ -115,6 +119,206 @@ func (c *ClientAPI) Verify(configErrs *ConfigErrors, isMonolith bool) {
 	checkURL(configErrs, "client_api.internal_api.connect", string(c.InternalAPI.Connect))
 	checkURL(configErrs, "client_api.external_api.listen", string(c.ExternalAPI.Listen))
 }
+
+type Login struct {
+	SSO SSO `yaml:"sso"`
+}
+
+// LoginTokenEnabled returns whether any login type uses
+// authtypes.LoginTypeToken.
+func (l *Login) LoginTokenEnabled() bool {
+	return l.SSO.Enabled
+}
+
+func (l *Login) Verify(configErrs *ConfigErrors) {
+	l.SSO.Verify(configErrs)
+}
+
+type SSO struct {
+	// Enabled determines whether SSO should be allowed.
+	Enabled bool `yaml:"enabled"`
+
+	// CallbackURL is the absolute URL where a user agent can reach
+	// the Dendrite `/_matrix/v3/login/sso/callback` endpoint. This is
+	// used to create SSO redirect URLs passed to identity
+	// providers. If this is empty, a default is inferred from request
+	// headers. When Dendrite is running behind a proxy, this may not
+	// always be the right information.
+	CallbackURL string `yaml:"callback_url"`
+
+	// Providers list the identity providers this server is capable of confirming an
+	// identity with.
+	Providers []IdentityProvider `yaml:"providers"`
+
+	// DefaultProviderID is the provider to use when the client doesn't indicate one.
+	// This is legacy support. If empty, the first provider listed is used.
+	DefaultProviderID string `yaml:"default_provider"`
+}
+
+func (sso *SSO) Verify(configErrs *ConfigErrors) {
+	var foundDefaultProvider bool
+	seenPIDs := make(map[string]bool, len(sso.Providers))
+	for _, p := range sso.Providers {
+		p = p.WithDefaults()
+		p.verifyNormalized(configErrs)
+		if p.ID == sso.DefaultProviderID {
+			foundDefaultProvider = true
+		}
+		if seenPIDs[p.ID] {
+			configErrs.Add(fmt.Sprintf("duplicate identity provider for config key %q: %s", "client_api.sso.providers", p.ID))
+		}
+		seenPIDs[p.ID] = true
+	}
+	if sso.DefaultProviderID != "" && !foundDefaultProvider {
+		configErrs.Add(fmt.Sprintf("identity provider ID not found for config key %q: %s", "client_api.sso.default_provider", sso.DefaultProviderID))
+	}
+
+	if sso.Enabled {
+		if len(sso.Providers) == 0 {
+			configErrs.Add(fmt.Sprintf("empty list for config key %q", "client_api.sso.providers"))
+		}
+	}
+}
+
+type IdentityProvider struct {
+	// OAuth2 contains settings for IdPs based on OAuth2 (but not OpenID Connect).
+	OAuth2 OAuth2 `yaml:"oauth2"`
+
+	// OIDC contains settings for IdPs based on OpenID Connect.
+	OIDC OIDC `yaml:"oidc"`
+
+	// ID is the unique identifier of this IdP. If empty, the brand will be used.
+	ID string `yaml:"id"`
+
+	// Name is a human-friendly name of the provider. If empty, a default based on
+	// the brand will be used.
+	Name string `yaml:"name"`
+
+	// Brand is a hint on how to display the IdP to the user.
+	//
+	// See https://github.com/matrix-org/matrix-doc/blob/old_master/informal/idp-brands.md.
+	Brand SSOBrand `yaml:"brand"`
+
+	// Icon is an MXC URI describing how to display the IdP to the user. Prefer using `brand`.
+	Icon string `yaml:"icon"`
+
+	// Type describes how this IdP is implemented. If this is empty, a default is chosen
+	// based on brand or which subkeys exist.
+	Type IdentityProviderType `yaml:"type"`
+}
+
+func (idp *IdentityProvider) WithDefaults() IdentityProvider {
+	p := *idp
+	if p.ID == "" {
+		p.ID = string(p.Brand)
+	}
+	if p.OIDC.DiscoveryURL == "" {
+		p.OIDC.DiscoveryURL = oidcDefaultDiscoveryURLs[idp.Brand]
+	}
+	if p.Type == "" {
+		if p.OIDC.DiscoveryURL != "" {
+			p.Type = SSOTypeOIDC
+		} else if p.Brand == SSOBrandGitHub {
+			p.Type = SSOTypeGitHub
+		}
+	}
+	if p.Name == "" {
+		p.Name = oidcDefaultNames[p.Brand]
+	}
+
+	return p
+}
+
+type OAuth2 struct {
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+}
+
+type OIDC struct {
+	OAuth2       `yaml:",inline"`
+	DiscoveryURL string `yaml:"discovery_url"`
+}
+
+func (idp *IdentityProvider) Verify(configErrs *ConfigErrors) {
+	p := idp.WithDefaults()
+	p.verifyNormalized(configErrs)
+}
+
+func (idp *IdentityProvider) verifyNormalized(configErrs *ConfigErrors) {
+	checkNotEmpty(configErrs, "client_api.sso.providers.id", idp.ID)
+	checkNotEmpty(configErrs, "client_api.sso.providers.name", idp.Name)
+	if idp.Brand != "" && !checkIdentityProviderBrand(idp.Brand) {
+		configErrs.Add(fmt.Sprintf("unrecognised brand in identity provider %q for config key %q: %s", idp.ID, "client_api.sso.providers", idp.Brand))
+	}
+	if idp.Icon != "" {
+		checkIconURL(configErrs, "client_api.sso.providers.icon", idp.Icon)
+	}
+
+	switch idp.Type {
+	case SSOTypeOIDC:
+		checkNotEmpty(configErrs, "client_api.sso.providers.oidc.client_id", idp.OIDC.ClientID)
+		checkNotEmpty(configErrs, "client_api.sso.providers.oidc.client_secret", idp.OIDC.ClientSecret)
+		checkNotEmpty(configErrs, "client_api.sso.providers.oidc.discovery_url", idp.OIDC.DiscoveryURL)
+
+		checkEmpty(configErrs, "client_api.sso.providers.oauth2.client_id", idp.OAuth2.ClientID)
+		checkEmpty(configErrs, "client_api.sso.providers.oauth2.client_secret", idp.OAuth2.ClientSecret)
+
+	case SSOTypeGitHub:
+		checkNotEmpty(configErrs, "client_api.sso.providers.oauth2.client_id", idp.OAuth2.ClientID)
+		checkNotEmpty(configErrs, "client_api.sso.providers.oauth2.client_secret", idp.OAuth2.ClientSecret)
+
+	default:
+		configErrs.Add(fmt.Sprintf("unrecognised type in identity provider %q for config key %q: %s", idp.ID, "client_api.sso.providers", idp.Type))
+	}
+}
+
+// See https://github.com/matrix-org/matrix-doc/blob/old_master/informal/idp-brands.md.
+func checkIdentityProviderBrand(s SSOBrand) bool {
+	switch s {
+	case SSOBrandApple, SSOBrandFacebook, SSOBrandGitHub, SSOBrandGitLab, SSOBrandGoogle, SSOBrandTwitter:
+		return true
+	default:
+		return false
+	}
+}
+
+// SSOBrand corresponds to https://github.com/matrix-org/matrix-spec-proposals/blob/old_master/informal/idp-brands.md
+type SSOBrand string
+
+const (
+	SSOBrandApple    SSOBrand = "apple"
+	SSOBrandFacebook SSOBrand = "facebook"
+	SSOBrandGitHub   SSOBrand = "github"
+	SSOBrandGitLab   SSOBrand = "gitlab"
+	SSOBrandGoogle   SSOBrand = "google"
+	SSOBrandTwitter  SSOBrand = "twitter"
+)
+
+var (
+	oidcDefaultDiscoveryURLs = map[SSOBrand]string{
+		// https://developers.facebook.com/docs/facebook-login/limited-login/token/
+		SSOBrandFacebook: "https://www.facebook.com/.well-known/openid-configuration/",
+		// https://docs.gitlab.com/ee/integration/openid_connect_provider.html
+		SSOBrandGitLab: "https://gitlab.com/.well-known/openid-configuration",
+		// https://developers.google.com/identity/protocols/oauth2/openid-connect
+		SSOBrandGoogle: "https://accounts.google.com/.well-known/openid-configuration",
+	}
+	oidcDefaultNames = map[SSOBrand]string{
+		SSOBrandApple:    "Apple",
+		SSOBrandFacebook: "Facebook",
+		SSOBrandGitHub:   "GitHub",
+		SSOBrandGitLab:   "GitLab",
+		SSOBrandGoogle:   "Google",
+		SSOBrandTwitter:  "Twitter",
+	}
+)
+
+type IdentityProviderType string
+
+const (
+	SSOTypeOIDC   IdentityProviderType = "oidc"
+	SSOTypeGitHub IdentityProviderType = "github"
+)
 
 type TURN struct {
 	// TODO Guest Support

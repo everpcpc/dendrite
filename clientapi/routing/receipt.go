@@ -24,13 +24,12 @@ import (
 	"github.com/matrix-org/dendrite/clientapi/producers"
 	"github.com/matrix-org/gomatrixserverlib"
 
-	"github.com/matrix-org/dendrite/userapi/api"
 	userapi "github.com/matrix-org/dendrite/userapi/api"
 	"github.com/matrix-org/util"
 	"github.com/sirupsen/logrus"
 )
 
-func SetReceipt(req *http.Request, userAPI api.ClientUserAPI, syncProducer *producers.SyncAPIProducer, device *userapi.Device, roomID, receiptType, eventID string) util.JSONResponse {
+func SetReceipt(req *http.Request, userAPI userapi.ClientUserAPI, syncProducer *producers.SyncAPIProducer, device *userapi.Device, roomID, receiptType, eventID string) util.JSONResponse {
 	timestamp := gomatrixserverlib.AsTimestamp(time.Now())
 	logrus.WithFields(logrus.Fields{
 		"roomID":      roomID,
@@ -52,13 +51,13 @@ func SetReceipt(req *http.Request, userAPI api.ClientUserAPI, syncProducer *prod
 			return jsonerror.InternalServerError()
 		}
 
-		dataReq := api.InputAccountDataRequest{
+		dataReq := userapi.InputAccountDataRequest{
 			UserID:      device.UserID,
 			DataType:    "m.fully_read",
 			RoomID:      roomID,
 			AccountData: data,
 		}
-		dataRes := api.InputAccountDataResponse{}
+		dataRes := userapi.InputAccountDataResponse{}
 		if err := userAPI.InputAccountData(req.Context(), &dataReq, &dataRes); err != nil {
 			util.GetLogger(req.Context()).WithError(err).Error("userAPI.InputAccountData failed")
 			return util.ErrorResponse(err)

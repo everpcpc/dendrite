@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/matrix-org/gomatrixserverlib"
@@ -13,13 +14,31 @@ import (
 )
 
 func main() {
-	defaultsForCI := flag.Bool("ci", false, "Populate the configuration with sane defaults for use in CI")
-	serverName := flag.String("server", "", "The domain name of the server if not 'localhost'")
-	dbURI := flag.String("db", "", "The DB URI to use for all components (PostgreSQL only)")
-	dirPath := flag.String("dir", "./", "The folder to use for paths (like SQLite databases, media storage)")
-	normalise := flag.String("normalise", "", "Normalise an existing configuration file by adding new/missing options and defaults")
-	polylith := flag.Bool("polylith", false, "Generate a config that makes sense for polylith deployments")
-	flag.Parse()
+	cfg, err := buildConfig(flag.CommandLine, os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	bs, err := yaml.Marshal(cfg)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(string(bs))
+}
+
+func buildConfig(fs *flag.FlagSet, args []string) (*config.Dendrite, error) {
+	defaultsForCI := fs.Bool("ci", false, "Populate the configuration with sane defaults for use in CI")
+	serverName := fs.String("server", "", "The domain name of the server if not 'localhost'")
+	dbURI := fs.String("db", "", "The DB URI to use for all components (PostgreSQL only)")
+	dirPath := fs.String("dir", "./", "The folder to use for paths (like SQLite databases, media storage)")
+	normalise := fs.String("normalise", "", "Normalise an existing configuration file by adding new/missing options and defaults")
+	polylith := fs.Bool("polylith", false, "Generate a config that makes sense for polylith deployments")
+
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
 
 	var cfg *config.Dendrite
 	if *normalise == "" {
@@ -69,6 +88,26 @@ func main() {
 		if *defaultsForCI {
 			cfg.AppServiceAPI.DisableTLSValidation = true
 			cfg.ClientAPI.RateLimiting.Enabled = false
+			cfg.ClientAPI.Login.SSO.Enabled = true
+			cfg.ClientAPI.Login.SSO.Providers = []config.IdentityProvider{
+				{
+					Brand: "github",
+					OAuth2: config.OAuth2{
+						ClientID:     "aclientid",
+						ClientSecret: "aclientsecret",
+					},
+				},
+				{
+					Brand: "google",
+					OIDC: config.OIDC{
+						OAuth2: config.OAuth2{
+							ClientID:     "aclientid",
+							ClientSecret: "aclientsecret",
+						},
+						DiscoveryURL: "https://accounts.google.com/.well-known/openid-configuration",
+					},
+				},
+			}
 			cfg.FederationAPI.DisableTLSValidation = false
 			// don't hit matrix.org when running tests!!!
 			cfg.FederationAPI.KeyPerspectives = config.KeyPerspectives{}
@@ -79,6 +118,9 @@ func main() {
 			cfg.UserAPI.BCryptCost = bcrypt.MinCost
 			cfg.Global.JetStream.InMemory = true
 			cfg.Global.JetStream.StoragePath = config.Path(*dirPath)
+			if *polylith {
+				cfg.Global.JetStream.Addresses = []string{"localhost"}
+			}
 			cfg.ClientAPI.RegistrationDisabled = false
 			cfg.ClientAPI.OpenRegistrationWithoutVerificationEnabled = true
 			cfg.ClientAPI.RegistrationSharedSecret = "complement"
@@ -96,14 +138,9 @@ func main() {
 	} else {
 		var err error
 		if cfg, err = config.Load(*normalise, !*polylith); err != nil {
-			panic(err)
+			return nil, err
 		}
 	}
 
-	j, err := yaml.Marshal(cfg)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println(string(j))
+	return cfg, nil
 }

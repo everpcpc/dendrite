@@ -267,6 +267,10 @@ func (idp *IdentityProvider) verifyNormalized(configErrs *ConfigErrors) {
 		checkNotEmpty(configErrs, "client_api.sso.providers.oauth2.client_id", idp.OAuth2.ClientID)
 		checkNotEmpty(configErrs, "client_api.sso.providers.oauth2.client_secret", idp.OAuth2.ClientSecret)
 
+	case SSOTypeMastodon:
+		checkNotEmpty(configErrs, "client_api.sso.providers.oauth2.client_id", idp.OAuth2.ClientID)
+		checkNotEmpty(configErrs, "client_api.sso.providers.oauth2.client_secret", idp.OAuth2.ClientSecret)
+
 	default:
 		configErrs.Add(fmt.Sprintf("unrecognised type in identity provider %q for config key %q: %s", idp.ID, "client_api.sso.providers", idp.Type))
 	}
@@ -292,6 +296,7 @@ const (
 	SSOBrandGitLab   SSOBrand = "gitlab"
 	SSOBrandGoogle   SSOBrand = "google"
 	SSOBrandTwitter  SSOBrand = "twitter"
+	SSOBrandMastodon SSOBrand = "mastodon"
 )
 
 var (
@@ -310,6 +315,7 @@ var (
 		SSOBrandGitLab:   "GitLab",
 		SSOBrandGoogle:   "Google",
 		SSOBrandTwitter:  "Twitter",
+		SSOBrandMastodon: "Mastodon",
 	}
 )
 

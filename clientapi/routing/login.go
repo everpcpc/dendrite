@@ -72,6 +72,9 @@ func ssoLogin(cfg *config.ClientAPI) []stage {
 			case config.SSOTypeGitHub:
 				brand = config.SSOBrandGitHub
 
+			case config.SSOTypeMastodon:
+				brand = config.SSOBrandMastodon
+
 			default:
 				brand = config.SSOBrand(idp.ID)
 			}

@@ -33,6 +33,13 @@ func Password(
 	device *api.Device,
 	cfg *config.ClientAPI,
 ) util.JSONResponse {
+	if !cfg.Login.PasswordEnabled() {
+		return util.JSONResponse{
+			Code: http.StatusBadRequest,
+			JSON: jsonerror.Forbidden("Password login is disabled on this server"),
+		}
+	}
+
 	// Check that the existing password is right.
 	var r newPasswordRequest
 	r.LogoutDevices = true

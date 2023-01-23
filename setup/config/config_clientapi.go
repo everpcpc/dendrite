@@ -121,7 +121,8 @@ func (c *ClientAPI) Verify(configErrs *ConfigErrors, isMonolith bool) {
 }
 
 type Login struct {
-	SSO SSO `yaml:"sso"`
+	SSO      SSO      `yaml:"sso"`
+	Password Password `yaml:"password"`
 }
 
 // LoginTokenEnabled returns whether any login type uses
@@ -130,8 +131,17 @@ func (l *Login) LoginTokenEnabled() bool {
 	return l.SSO.Enabled
 }
 
+func (l *Login) PasswordEnabled() bool {
+	return !l.Password.Disabled
+}
+
 func (l *Login) Verify(configErrs *ConfigErrors) {
 	l.SSO.Verify(configErrs)
+}
+
+type Password struct {
+	// If set, password login is disabled.
+	Disabled bool `yaml:"disabled"`
 }
 
 type SSO struct {

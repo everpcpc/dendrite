@@ -56,6 +56,13 @@ func LoginFromJSONReader(ctx context.Context, r io.Reader, useraccountAPI uapi.U
 	var typ Type
 	switch header.Type {
 	case authtypes.LoginTypePassword:
+		if !cfg.Login.PasswordEnabled() {
+			err := util.JSONResponse{
+				Code: http.StatusBadRequest,
+				JSON: jsonerror.InvalidArgumentValue("disabled login type: " + header.Type),
+			}
+			return nil, nil, &err
+		}
 		typ = &LoginTypePassword{
 			GetAccountByPassword: useraccountAPI.QueryAccountByPassword,
 			Config:               cfg,

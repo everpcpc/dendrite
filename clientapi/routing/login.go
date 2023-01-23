@@ -112,7 +112,10 @@ func Login(
 	cfg *config.ClientAPI,
 ) util.JSONResponse {
 	if req.Method == http.MethodGet {
-		allFlows := passwordLogin()
+		allFlows := []stage{}
+		if cfg.Login.PasswordEnabled() {
+			allFlows = append(allFlows, passwordLogin()...)
+		}
 		allFlows = append(allFlows, ssoLogin(cfg)...)
 		allFlows = append(allFlows, tokenLogin(cfg)...)
 		return util.JSONResponse{

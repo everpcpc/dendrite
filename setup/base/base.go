@@ -447,6 +447,7 @@ func (b *BaseDendrite) SetupAndServeHTTP(
 	externalAddr, _ := externalHTTPAddr.Address()
 
 	externalRouter := mux.NewRouter().SkipClean(true).UseEncodedPath()
+	externalRouter.Use(proxyMiddleware)
 	externalRouter.Use(timeoutMiddleware)
 	internalRouter := externalRouter
 
@@ -585,6 +586,17 @@ func timeoutMiddleware(next http.Handler) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), HTTPServerRequestTimeout)
 		defer cancel()
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// proxyMiddleware is a middleware that parse X-Foward-* headers.
+func proxyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proto := r.Header.Get("X-Forwarded-Proto")
+		if proto != "" {
+			r.URL.Scheme = proto
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

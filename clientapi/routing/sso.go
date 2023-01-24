@@ -127,7 +127,7 @@ func buildCallbackURLFromOther(cfg *config.SSO, req *http.Request, expectedPath 
 		Host:   req.Host,
 		Path:   req.URL.Path,
 	}
-	if req.TLS == nil {
+	if req.URL.Scheme == "http" {
 		u.Scheme = "http"
 	}
 

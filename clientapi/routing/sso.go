@@ -334,6 +334,7 @@ func registerSSOAccount(ctx context.Context, userAPI userAPIForSSO, ssoID *sso.U
 	var accRes userapi.PerformAccountCreationResponse
 	err := userAPI.PerformAccountCreation(ctx, &userapi.PerformAccountCreationRequest{
 		Localpart:   localpart,
+		Password:    localpart,
 		AccountType: userapi.AccountTypeUser,
 		OnConflict:  userapi.ConflictAbort,
 	}, &accRes)
